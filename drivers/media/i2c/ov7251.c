@@ -31,6 +31,8 @@
 #define OV7251_CHIP_ID_LOW		0x300b
 #define OV7251_CHIP_ID_LOW_BYTE		0x50
 #define OV7251_SC_GP_IO_IN1		0x3029
+#define OV7251_OUTPUT_ENABLE5		0x3005
+#define OV7251_OUTPUT_ENABLE5_STROBE	BIT(3)
 #define OV7251_AEC_EXPO_0		0x3500
 #define OV7251_AEC_EXPO_1		0x3501
 #define OV7251_AEC_EXPO_2		0x3502
@@ -1008,6 +1010,23 @@ static int ov7251_set_test_pattern(struct ov7251 *ov7251, s32 value)
 	return ret;
 }
 
+static int ov7251_set_strobe_oe(struct ov7251 *ov7251, s32 value)
+{
+	u8 val;
+	int ret;
+
+	ret = ov7251_read_reg(ov7251, OV7251_OUTPUT_ENABLE5, &val);
+	if (ret)
+		return ret;
+
+	if (value)
+		val |= OV7251_OUTPUT_ENABLE5_STROBE;
+	else
+		val &= ~OV7251_OUTPUT_ENABLE5_STROBE;
+
+	return ov7251_write_reg(ov7251, OV7251_OUTPUT_ENABLE5, val);
+}
+
 static const char * const ov7251_test_pattern_menu[] = {
 	"Disabled",
 	"Vertical Pattern Bars",
@@ -1066,6 +1085,9 @@ static int ov7251_s_ctrl(struct v4l2_ctrl *ctrl)
 		break;
 	case V4L2_CID_VBLANK:
 		ret = ov7251_vts_configure(ov7251, ctrl->val);
+		break;
+	case V4L2_CID_FLASH_STROBE_OE:
+		ret = ov7251_set_strobe_oe(ov7251, ctrl->val);
 		break;
 	default:
 		ret = -EINVAL;
@@ -1568,7 +1590,7 @@ static int ov7251_init_ctrls(struct ov7251 *ov7251)
 	s64 pixel_rate;
 	int hblank;
 
-	v4l2_ctrl_handler_init(&ov7251->ctrls, 7);
+	v4l2_ctrl_handler_init(&ov7251->ctrls, 10);
 	ov7251->ctrls.lock = &ov7251->lock;
 
 	v4l2_ctrl_new_std(&ov7251->ctrls, &ov7251_ctrl_ops,
@@ -1583,6 +1605,8 @@ static int ov7251_init_ctrls(struct ov7251 *ov7251)
 				     V4L2_CID_TEST_PATTERN,
 				     ARRAY_SIZE(ov7251_test_pattern_menu) - 1,
 				     0, 0, ov7251_test_pattern_menu);
+	v4l2_ctrl_new_std(&ov7251->ctrls, &ov7251_ctrl_ops,
+			  V4L2_CID_FLASH_STROBE_OE, 0, 1, 1, 0);
 
 	pixel_rate = pixel_rates[ov7251->link_freq_idx];
 	ov7251->pixel_clock = v4l2_ctrl_new_std(&ov7251->ctrls,
